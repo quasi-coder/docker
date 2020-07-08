@@ -1,0 +1,9 @@
+version: '3'
+services:
+  web:
+    image: jboss/wildfly
+    volumes:
+      - ~/Documents/OpenSource/docker/dockercompose/helloweb/deployments:/opt/jboss/wildfly/standalone/deployments
+    ports:
+      - 8080:8080
+

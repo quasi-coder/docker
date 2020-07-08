@@ -1,0 +1,6 @@
+version: '2'
+services:
+  config:
+    environment:
+      AWS_ACCESS_KEY: XXXX
+      AWS_SECRET_KEY: XXXX

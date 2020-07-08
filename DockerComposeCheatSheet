@@ -1,0 +1,30 @@
+-Allows to run and define multi container application
+-Configuration defined in one or more files
+    -docker-compose.yml (default)
+    -docker-compose.override.yml(default)
+    -single command to manage all services
+
+-Multiple projects using -p
+  Create multiple isolated environments on a host
+  -docker-compose -p <serviceName> up -d
+  -docker-compose -p <serviceName> up -d
+
+  More real life example would be is let's say you have a Git Repository, you got multiple branches, you can fire up test environment using -p, and take the branch name here. So for each feature branch in your Git, you can easily set up a docker compose application, run it, test it
+
+-Default override
+  -docker-compose.override.yml
+    -It replaces or extends value.
+    -Single-value options like image replace the old value
+    -Multivalue options like ports are concatenated;newer values and higher precedence
+
+-Containers
+  -docker-compose up -d(service name is <dirName>_<service> and 1 being the single instance of the service
+                        the default context is the directory name, so we're still trying to find those services, network, et cetera, in that context)
+  -docker-compose ps
+  -docker-compose logs -f
+  -docker-compose down (bring the container down and remove associated network )
+
+-Multiple files override
+  -docker-compose -f docker-compose.yml -f docker-compose.db.yml up -d/ps/down
+
+docker-compose  --verbose up -d (Shows what all files have been used)

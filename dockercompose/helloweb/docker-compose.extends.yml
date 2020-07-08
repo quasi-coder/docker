@@ -1,0 +1,11 @@
+version : '2'
+services:
+  web:
+    extends:
+      file: configuration.yml
+      service: config
+    image: jboss/wildfly
+    volumes:
+      - deployments:/opt/jboss/wildfly/standalone/deployments
+    ports:
+      -8080:8080

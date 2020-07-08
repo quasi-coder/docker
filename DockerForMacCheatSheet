@@ -1,0 +1,108 @@
+1) Docker information check
+    -docker info
+    -docker version
+
+2) Run docker container in interactive mode:
+    -docker container run -it <imageName>
+
+3) Run docker container in background mode
+   -docker container run -d <imageName>
+
+4) Docker Container
+    -docker container ls (Shows running containers only)
+    -docker container ls -a (Shows running and exited containers)
+    -docker container rm <containerId or containerName> (Only if the container is stopped it will be removed)
+    -docker container run -d --name <containerName> <imageName> (Spin container with name)
+    -docker container rm -f <containerName> (Stop and remove container)
+    -docker container run -it --name <containerName> <imageName> bash (Container can start only one command, by providing bash overriding the default command with bash)
+    -docker container rm $(docker ps -aq)- Remove all the stopped container
+    -docker container run -d --name <containerName> -P <imageName> (By saying -P you pick a random port in certain range and expose, suppose if we spin up jboss/wildfly(runs default on 8080), -P says take all the network interfaces on the host which is indicated by 0.0.0.0, port lets say 327968 over there and redirect it to port 8080 in the container, if you try to access localhost:32768, it should be)
+    -docker container run -d --name<containerName> -p 8080:8080 <imageName>(specifying particular port on host machine using -p, first 8080 is on host and second is on container)
+    -docker container logs <containerName/containerId> -f (Continuous tail of logs)
+    -docker container run <imageName>:<tagName> (If two image files of same name but different tags are present, append the tagName too )
+
+5) Volume mapping
+    -docker container run -d --name web -p 8080:8080 -v <pathToWar>:/opt/jboss/wildfly/standalone/deployments/<warName> jboss/wildfly
+      -- Test : curl http://localhost:8080/webapp/resources/persons
+
+6) Docker image
+    -docker build -t <imageName> .
+    (docker CLI is giving a command to the docker host, build an image, and by saying dot, I am giving it a context. And I'm giving the current directory as the context. An entire context is sent from the client to the host.You can have .dockerignore, which follows very similar format as .gitignore.)
+
+    -docker image build -t <imageName>:<tagName> .
+
+    -docker history<imageName> (List down the history of image command)
+
+    -docker build --squash -t <imageName> .
+    (Each command typically in docker file would add a new layer to the docker image, because it's using augmented file system. So, if you want to reduce the number of layers, or compress all of those layers into a single layer use squash.)
+
+    --if no imageName has been given it will show the imageName as <none> with tag<none> but we can still run the container by giving docker container run <imageId>
+
+    -docker image tag <imageName>:<oldtag> <imageName>:<newtag> (Change the tag)
+
+    - docker login && docker push <yourrepo>/<imageName>:latest(Push the image to your repository in dockerHub)
+
+
+7) COPY instruction: Copy new files or directories to the container filesystem(Ex- Copy the war/jar to container)
+
+8) ADD instruction: COPY instruction + Allows tar file auto-extraction in the image + Download files from remote URL.
+    -ADD app.tar.gz /opt/var/myapp     (app.tar.gz present in localdir, myapp dir is in container)
+
+9)Use curl or wget commands to download the tar files , extract it and remove the tar.gz file.
+
+10)Always only one CMD command gets executed, no matter how many Dockerfiles have been referred , only the last one CMD will be executed
+
+11) RUN instruction: Used for installing software package (You only want to execute one)
+      --RUN apt-get update && apt-get install -y git
+      --RUN /opt/jboss/wildfly/bin/add-user.sh admin Admin#007 -silent
+
+12)CMD instruction: defaults for executing container, can be overridden from CLI
+      --CMD["/opt/jboss/wildfly/bin/standalone.sh", "-b","0.0.0.0", "-bmanagement", "0.0.0.0"]
+
+13)ENTRYPOINT instruction: configures the container executable; can be overriden using --entrypoint from CLI
+      --Default value: /bin/sh -c
+      --ENTRYPOINT["/entrypoint.sh"]
+
+14)EXPOSE instruction: network ports on which container is listening
+      --EXPOSE 9990
+      --Need to explicitly publish the host port
+      Let's say you are building an application and in that application, you are publishing a rest API on a certain port, or on a network port. Then, you need to expose that port. So for example, in our WildFly image, let's say we want to expose an administrative port as well, then we'll have to add, EXPOSE 9990. Expose only exposes the port from the container. But, the important part is to understand, when you are running the container, at that point of time you still need to say, Docker run either -P or -p to publish the host port.
+
+15) VOLUME instruction: creates a mount point with the specified name
+      --VOLUME /opt/couchbase/var
+      --docker container run ... -v ~/data:/opt/couchbase/var
+
+16)USER instruction: sets the user name or UID to use when running the image
+
+17)HEALTHCHECK: performs a healthcheck on the application inside the container
+      --HEALTHCHECK --interval=5s --timeout=3s CMD curl --fail http://localhost:8091/pools || exit 1
+    (I'm saying, /pools, ping that rest API and make sure that the couchbase database pools are available, and if it fails, then you exit with status 1. So, essentially what will happen is, every five seconds the Docker engine will make a ping to the container. If the pool exists, then it's good. If the pool doesn't exist, or if for some reason, the pool is not accessible within three seconds, it'll mark the container as unhealthy. And, if it's unhealthy, then the Docker scheduler might kick in and reschedule the container somewhere else.
+
+
+
+18)Local Docker registry
+    a Docker registry is just a specific running container, registry.
+
+    -docker run -d -p 5000:5000 --restart=always --name registry registry:2
+      --downloads the registry image which is tagged 2. This tag references the latest version of the registry at the time of this writing.
+      --exposes port 5000 to the host, under the same port
+      --gives the container the name registry instead of assigning it a random name
+
+    Push the image to local registry :
+      -docker image tag hellodivya:latest localhost:5000/divya/hellodivya:latest
+      -docker image ls
+        localhost:5000/divya/hellodivya   latest              c4f0f9faba83        5 hours ago         73.9MB
+
+      -docker image push localhost:5000/divya/hellodivya:latest
+
+
+  19) Entire system(Images/volume/network/container) prune
+      -docker system prune -fa --volumes (Make sure the containers are stopped)
+
+  20) docker container stats --format "table {{.Container}}\t{{.CPUPerc}}" <containerName>
+      docker container stats <conatinerName> --no-stream
+
+  21) For generating dashboards for monitoring the stats of the container, Docker remote API
+      curl --unix-socket /var/run/docker.sock http://localhost/containers/<containerName>/stats
+
+  22) docker system events  (Give comprehensive stats)

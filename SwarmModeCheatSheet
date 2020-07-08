@@ -1,0 +1,153 @@
+Swarm Mode
+- Natively managing a cluster of Docker engines called a swarm
+- Declaritive state model
+- Self-organizing and self healing
+- Service discovery, load balancing, and scaling
+- Rolling updates
+
+-docker swarm --help (Show options)
+-docker swarm init (By default the first node is manager node)
+-docker info (Gives you the swarm state, manager address, manager nodes , containers)
+-docker swarm leave -f (Forcefully leave the node if only one manager node is running)
+-docker swarm init --listen-addr <ip> (To specify a listen address that this is where I'm going to be listening for request for other managers or workers to join me)
+-docker swarm join --token <worker_token> <manager> (Connect manager to worker)
+-docker swarm join --manager --token <manager_token> --listen-addr <master2> <master1>  (If the request goes to secondary, it is automatically proxied to the primary and primary is the one that is actually serving the request itself.)
+
+==Load Balancer (Routing Mesh)
+  Swarm Mode has a load balancer. Load balancing containers has been hard up until now because you have to update the configuration of the load balancers as containers are started or stopped. They could be started and stopping on different nodes. This is typically done by overriding the configuration file of the load balancer and bouncing it, or, by updating the configuration and the distributed key values tool like Etcd. That is tricky. Docker now has built-in load balancing in the engine itself using, very important, a container-aware routing mesh. Let's understand what that means. This mesh network can transparently read out traffic from any host to a container. For example, publishing a service on port 8080 will reserve a swarm-wide ingress port so that each node will listen to port 8080. Each node will then read out traffic to the container using DNS-based service discovery. This is actually very compatible with the existing infrastructure as well. External load balancer no longer need to know where the containers are running, they can just point towards any node, and the routing mesh will automatically redirect traffic. As a developer, this makes your life really easy. Now, even though it introduces an extra hop, it is still very efficient, since it uses IPVS. 
+
+-Create multi-node Swarm mode cluster using Docker Machine
+Complete script to create the cluster: `swarm-cluster.sh`
+. `docker-machine -v`
+. Pre-create 6 Docker Machines using `swarm-machines.sh`
+. Show list of machines: `docker-machine ls`
+. Initialize swarm mode on `manager`:(Leader)
+
+docker-machine ssh manager1 \
+        "docker swarm init \
+        --listen-addr $(docker-machine ip manager1) \
+        --advertise-addr $(docker-machine ip manager1)"
+
+. Show list of nodes: `docker-machine ssh manager1 "docker node ls"`
+. Get manager token: `docker-machine ssh manager1 "docker swarm join-token manager -q"`
+. Get worker token: `docker-machine ssh manager1 "docker swarm join-token worker -q"`
+. Manager 2 joins cluster:(Reachable)
+
+docker-machine ssh manager2 \
+        "docker swarm join \
+        --token `docker-machine ssh manager1 "docker swarm join-token manager -q"` \
+        --listen-addr $(docker-machine ip manager2) \
+        --advertise-addr $(docker-machine ip manager2) \
+        $(docker-machine ip manager1)"
+
+. Show list of nodes: `docker-machine ssh manager1 "docker node ls"`
+. Manager 3 joins cluster:(Reachable)
+
+docker-machine ssh manager3 \
+        "docker swarm join \
+        --token `docker-machine ssh manager1 "docker swarm join-token manager -q"` \
+        --listen-addr $(docker-machine ip manager3) \
+        --advertise-addr $(docker-machine ip manager3) \
+        $(docker-machine ip manager1)"
+
+. Show list of nodes: `docker-machine ssh manager1 "docker node ls"`
+. Worker 1 join cluster:
+
+docker-machine ssh worker1 \
+        "docker swarm join \
+        --token `docker-machine ssh manager1 "docker swarm join-token worker -q"` \
+        --listen-addr $(docker-machine ip worker1) \
+        --advertise-addr $(docker-machine ip worker1) \
+        $(docker-machine ip manager1)"
+
+. Show list of nodes: `docker-machine ssh manager1 "docker node ls"`
+. Worker 2 join cluster:
+
+docker-machine ssh worker2 \
+        "docker swarm join \
+        --token `docker-machine ssh manager1 "docker swarm join-token worker -q"` \
+        --listen-addr $(docker-machine ip worker2) \
+        --advertise-addr $(docker-machine ip worker2) \
+        $(docker-machine ip manager1)"
+
+. Worker 3 join cluster:
+
+docker-machine ssh worker3 \
+        "docker swarm join \
+        --token `docker-machine ssh manager1 "docker swarm join-token worker -q"` \
+        --listen-addr $(docker-machine ip worker3) \
+        --advertise-addr $(docker-machine ip worker3) \
+        $(docker-machine ip manager1)"
+
+. Show list of nodes: `docker-machine ssh manager1 "docker node ls"`
+. Show cluster information: `docker-machine ssh manager1 "docker info"`
+
+=== Deploying services to Swarm mode
+   == Create service
+. SSH to `manager1`: `docker-machine ssh manager1`
+. Create a replicated service: `docker service create --name web --replicas 3 -p 8080:8080 jboss/wildfly`
+. List service and replicas: `docker service ls`
+. Inspect service: `docker service inspect web`
+. List containers: `docker service ps web`
+
+== Container failure
+
+. In `manager1`, see the nodes where containers are running: `docker service ps web`
+. SSH to a node where the container is running. Show the list of containers: `docker container ls`
+. Exit out of `manager1`
+. Show the number of replicas: `docker-machine ssh manager1 "docker service ls"`
+. Kill a container: `docker-machine ssh <node> "docker container rm -f <cid>"`
+.. `<node>` is where the container is running
+.. `<cid>` is the id of the container
+. Show the replicas in service: `docker-machine ssh manager1 "docker service ls"`
+.. Show that only 2 replicas are running and reconciliation happens by swarm manger
+
+=== Node failure
+
+. Show the list of nodes: `docker-machine ls`
+. Show the node where containers are running: `docker-machine ssh manager1 "docker service ps web"`
+. Show number of replicas for the service: `docker-machine ssh manager1 "docker service ls"`
+. Stop a node where the container is running: `docker-machine stop <node>`
+. Show the list of nodes: `docker-machine ls`
+. Show the services: `docker-machine ssh manager1 "docker service ls"`
+. Show how desired vs actual is reconciled: `docker service ls`
+. Show how container is started on a different node: `docker service ps web`
+
+ Scaling and rolling update of service
+ === Scale service
+
+. List service and replicas: `docker ssh manager1 "docker service ls"`
+. Show node where containers are running: `docker ssh manager1 "docker service ps web"`
+. Use filters to restrict output: `docker-machine ssh manager1 "docker service ps -f \"desired-state=running\" web"`
+. SSH to `manager`: `docker-machine ssh manager1`
+. Check the list of running services again: `docker service ps -f "desired-state=running" web`
+. Scale service: `docker service scale web=6`
+. Shutdown service: `docker service rm web`
+. Show the list of services: `docker service ls`
+
+=== Rolling update of service
+. Create 6 replicas of a service: `docker service create --name webapp --replicas 6 -p 8080:8080 arungupta/wildfly-app:1`
+. Check service: `docker service ls`
+. Check tasks in the service: `docker service ps webapp`. Show the version of image in each app.
+. Access the application http://192.168.99.100:8080/app/index.jsp and show green background
+. Rolling update service: `docker service update webapp --image arungupta/wildfly-app:2 --update-parallelism 2 --update-delay 10s`
+. Check status every 5 secs: `docker service ps webapp`
+. Access the application http://192.168.99.100:8080/app/index.jsp and show red background
+
+ === Multi-container application on multi-host cluster
+. Show the list of services: `docker service ls`
+. Remove service `docker service rm webapp`
+. Login to `manager1`: `docker-machine ssh manager1`
+. Create a new file `docker-compose.yml`
+. Deploy: `docker stack deploy --compose-file=docker-compose.yml webapp`
+. `docker stack ls`
+. `docker service ls`
+. `docker service ps webapp_web` - show the node where the container is running
+. `docker service ps webapp_db` - show the node where the container is running
+. See the logs of `web` service
+.. Log in to the node where container is running: `docker-machine ssh <node-name>`
+.. See the list of containers: `docker container ls`
+.. View logs: `docker container logs <cid>`
+.. Alternatively (only on experimental) `docker service logs webapp_web`
+. Access the application `curl -v http://$(docker-machine ip <node>):8080/airlines/resources/airline`
+. Remove stack: `docker stack rm webapp`
